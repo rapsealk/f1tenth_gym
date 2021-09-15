@@ -178,8 +178,8 @@ class F110Env(gym.Env, utils.EzPickle):
             'poses_x': gym.spaces.Box(-100.0, 100.0, shape=(self.num_agents,)),
             'poses_y': gym.spaces.Box(-100.0, 100.0, shape=(self.num_agents,)),
             'poses_theta': gym.spaces.Box(0.0, np.pi * 2, shape=(self.num_agents,)),
-            'linear_vels_x': gym.spaces.Box(0.0, 10.0, shape=(self.num_agents,)),
-            'linear_vels_y': gym.spaces.Box(0.0, 10.0, shape=(self.num_agents,)),
+            'linear_vels_x': gym.spaces.Box(-1.0, 1.0, shape=(self.num_agents,)),
+            'linear_vels_y': gym.spaces.Box(-1.0, 1.0, shape=(self.num_agents,)),
             'ang_vels_z': gym.spaces.Box(0.0, np.pi * 2, shape=(self.num_agents,)),
             'collisions': gym.spaces.Box(0.0, float('inf'), shape=(self.num_agents,), dtype=np.uint8),
             'lap_times': gym.spaces.Box(0.0, float('inf'), shape=(self.num_agents,)),
@@ -282,7 +282,10 @@ class F110Env(gym.Env, utils.EzPickle):
 
         # check done
         done, toggle_list = self._check_done()
-        info = {'checkpoint_done': toggle_list}
+        lap_passed = (self.lap_counts > self.last_lap_counts).tolist()
+        info = {'checkpoint_done': toggle_list, 'lap_passed': lap_passed}
+        
+        self.last_lap_counts[:] = self.lap_counts
 
         return obs, reward, done, info
 
@@ -306,6 +309,8 @@ class F110Env(gym.Env, utils.EzPickle):
         self.near_start = True
         self.near_starts = np.array([True]*self.num_agents)
         self.toggle_list = np.zeros((self.num_agents,))
+        self.lap_counts - np.zeros((self.num_agents,))
+        self.last_lap_counts = self.lap_counts.copy()
 
         # states after reset
         self.start_xs = poses[:, 0]
