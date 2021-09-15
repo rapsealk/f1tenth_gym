@@ -37,11 +37,6 @@ import numpy as np
 import os
 import time
 
-# gl
-import pyglet
-pyglet.options['debug_gl'] = False
-from pyglet import gl
-
 # constants
 
 # rendering
