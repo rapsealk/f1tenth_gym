@@ -45,6 +45,7 @@ VIDEO_H = 400
 WINDOW_W = 1000
 WINDOW_H = 800
 
+
 class F110Env(gym.Env, utils.EzPickle):
     """
     OpenAI gym environment for F1TENTH
@@ -84,6 +85,7 @@ class F110Env(gym.Env, utils.EzPickle):
             timestep (float, default=0.01): physics timestep
 
             ego_idx (int, default=0): ego's index in list of agents
+            max_lap (int, default=inf)
     """
     metadata = {'render.modes': ['human', 'human_fast']}
 
@@ -133,6 +135,8 @@ class F110Env(gym.Env, utils.EzPickle):
             self.ego_idx = kwargs['ego_idx']
         except:
             self.ego_idx = 0
+
+        self.max_lap = kwargs.get('max_lap', float('inf'))
 
         # radius to consider done
         self.start_thresh = 0.5  # 10cm
@@ -230,12 +234,12 @@ class F110Env(gym.Env, utils.EzPickle):
                 self.near_starts[i] = False
                 self.toggle_list[i] += 1
             self.lap_counts[i] = self.toggle_list[i] // 2
-            if self.toggle_list[i] < 4:
+            if self.toggle_list[i] < self.max_lap:
                 self.lap_times[i] = self.current_time
         
-        done = (self.collisions[self.ego_idx]) or np.all(self.toggle_list >= 4)
+        done = (self.collisions[self.ego_idx]) or np.all(self.toggle_list >= self.max_lap)
         
-        return done, self.toggle_list >= 4
+        return done, self.toggle_list >= self.max_lap
 
     def _update_state(self, obs_dict):
         """
