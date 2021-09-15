@@ -172,6 +172,21 @@ class F110Env(gym.Env, utils.EzPickle):
         self.renderer = None
         self.current_obs = None
 
+        self._observation_space = gym.spaces.Dict({
+            'edo_idx': gym.spaces.Discrete(1),
+            'scans': gym.spaces.Box(0.0, 32.0, shape=(self.num_agents, 1080)),
+            'poses_x': gym.spaces.Box(-100.0, 100.0, shape=(self.num_agents,)),
+            'poses_y': gym.spaces.Box(-100.0, 100.0, shape=(self.num_agents,)),
+            'poses_theta': gym.spaces.Box(0.0, np.pi * 2, shape=(self.num_agents,)),
+            'linear_vels_x': gym.spaces.Box(0.0, 10.0, shape=(self.num_agents,)),
+            'linear_vels_y': gym.spaces.Box(0.0, 10.0, shape=(self.num_agents,)),
+            'ang_vels_z': gym.spaces.Box(0.0, np.pi * 2, shape=(self.num_agents,)),
+            'collisions': gym.spaces.Box(0.0, float('inf'), shape=(self.num_agents,), dtype=np.uint8),
+            'lap_times': gym.spaces.Box(0.0, float('inf'), shape=(self.num_agents,)),
+            'lap_counts': gym.spaces.Box(0.0, float('inf'), shape=(self.num_agents,), dtype=np.uint8)
+        })
+        self._action_space = gym.spaces.Box(-1.0, 1.0, shape=(self.num_agents, 2))
+
     def __del__(self):
         """
         Finalizer, does cleanup
@@ -358,3 +373,15 @@ class F110Env(gym.Env, utils.EzPickle):
             time.sleep(0.005)
         elif mode == 'human_fast':
             pass
+
+    @property
+    def observation_space(self):
+        return self._observation_space
+
+    @property
+    def action_space(self):
+        return self._action_space
+
+
+if __name__ == "__main__":
+    pass
