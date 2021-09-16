@@ -76,7 +76,7 @@ class EnvRenderer(pyglet.window.Window):
         self.right = width/2
         self.bottom = -height/2
         self.top = height/2
-        self.zoom_level = 1.2
+        self.zoom_level = 4
         self.zoomed_width = width
         self.zoomed_height = height
 
