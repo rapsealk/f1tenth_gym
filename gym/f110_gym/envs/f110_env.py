@@ -36,6 +36,7 @@ from f110_gym.envs.base_classes import Simulator
 import numpy as np
 import os
 import time
+from datetime import datetime
 
 # constants
 
@@ -171,6 +172,7 @@ class F110Env(gym.Env, utils.EzPickle):
         # initiate stuff
         self.sim = Simulator(self.params, self.num_agents, self.seed)
         self.sim.set_map(self.map_path, self.map_ext)
+        self.map_center = np.array([-28, 0])
 
         # rendering
         self.renderer = None
@@ -230,7 +232,7 @@ class F110Env(gym.Env, utils.EzPickle):
         closes = (temp_x ** 2 + temp_y ** 2) <= 0.1
         self._update_checkpoint_reaches(temp_x, temp_y)
         for i in range(self.num_agents):
-            if closes[i] and np.all(self._checkpoint_reaches[i]):
+            if closes[i] and temp_y[i] >= 0 and np.all(self._checkpoint_reaches[i]):
                 self.lap_counts[i] += 1
                 self.lap_times[i] = self.current_time
                 self._checkpoint_reaches[i, :] = False
@@ -268,6 +270,15 @@ class F110Env(gym.Env, utils.EzPickle):
         self.poses_theta = obs_dict['poses_theta']
         self.collisions = obs_dict['collisions']
 
+    def _get_angle_on_track(self):
+        pos = np.concatenate([self.poses_x, self.poses_y], axis=-1)
+        dx, dy = pos - self.map_center
+        degree = np.arctan2(dy, dx) * 180 / np.pi
+        if degree < 0:
+            degree = 360 + degree
+        # print(f'[{datetime.now().isoformat()}] pos({pos}) d({dx:.2f}, {dy:.2f}) angle={degree:.2f}')
+        return degree
+
     def step(self, action):
         """
         Step function for the gym env
@@ -288,19 +299,28 @@ class F110Env(gym.Env, utils.EzPickle):
         obs['lap_counts'] = self.lap_counts
 
         self.current_obs = obs
-
-        # times
-        reward = self.timestep
-        self.current_time = self.current_time + self.timestep
         
         # update data member
         self._update_state(obs)
 
+        # times
+        # reward = self.timestep
+        self.current_time = self.current_time + self.timestep
+        track_angle = self._get_angle_on_track()
+        reward = track_angle - self.last_track_angle
+        reward = np.clip(reward, -0.1, 0.1)
+        self.last_track_angle = track_angle
+
         # check done
         done, toggle_list = self._check_done()
         lap_passed = (self.lap_counts > self.last_lap_counts).tolist()
+        if lap_passed[0]:
+            self.last_track_angle = 0
+            reward = 1.0
         info = {'checkpoint_done': toggle_list, 'lap_passed': lap_passed}
-        
+
+        # print(f'[{datetime.now().isoformat()}] pos(x={obs["poses_x"][0]:.2f}, y={obs["poses_y"][0]:.2f}) angle={self.last_track_angle:.2f}->{track_angle:.2f} reward={reward:.2f}')
+
         self.last_lap_counts[:] = self.lap_counts
 
         return obs, reward, done, info
@@ -327,6 +347,7 @@ class F110Env(gym.Env, utils.EzPickle):
         self.toggle_list = np.zeros((self.num_agents,))
         self.lap_counts - np.zeros((self.num_agents,))
         self.last_lap_counts = self.lap_counts.copy()
+        self.last_track_angle = 0
 
         # states after reset
         self.start_xs = poses[:, 0]
