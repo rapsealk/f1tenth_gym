@@ -139,8 +139,8 @@ class DDPG:
     def _get_actor_loss(self, s, a, r, s_next):
         with tf.GradientTape() as tape:
             actions = self.actor(s)
-            # loss = -self.critic(s, actions)
-            loss = self.critic(s, actions)
+            loss = -self.critic(s, actions)
+            # loss = self.critic(s, actions)
         grads = tape.gradient(loss, self.actor.trainable_variables)
         # grads = tf.clip_by_value(grads, clip_value_min=-20.0, clip_value_max=20.0)
         self.actor_optimizer.apply_gradients(zip(grads, self.actor.trainable_variables))

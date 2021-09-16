@@ -203,4 +203,7 @@ if __name__ == '__main__':
         obs, step_reward, done, info = env.step(np.array([[steer, speed]]))
         laptime += step_reward
         env.render(mode='human')
+        if info['lap_passed'][0]:
+            done = True
+    # x(min=-52.14407900642191, max=1.2427659448957173) y(min=-13.919160016844765, max=25.485083751327636)
     print('Sim elapsed time:', laptime, 'Real elapsed time:', time.time()-start)

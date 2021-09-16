@@ -191,6 +191,8 @@ class F110Env(gym.Env, utils.EzPickle):
         })
         self._action_space = gym.spaces.Box(-1.0, 1.0, shape=(self.num_agents, 2))
 
+        self._checkpoint_reaches = np.zeros((self.num_agents, 3))   # .astype(np.bool)
+
     def __del__(self):
         """
         Finalizer, does cleanup
@@ -217,29 +219,39 @@ class F110Env(gym.Env, utils.EzPickle):
         poses_x = np.array(self.poses_x)-self.start_xs
         poses_y = np.array(self.poses_y)-self.start_ys
         delta_pt = np.dot(self.start_rot, np.stack((poses_x, poses_y), axis=0))
-        temp_y = delta_pt[1,:]
+        temp_x = delta_pt[0, :]
+        temp_y = delta_pt[1, :]
         idx1 = temp_y > left_t
         idx2 = temp_y < -right_t
         temp_y[idx1] -= left_t
         temp_y[idx2] = -right_t - temp_y[idx2]
         temp_y[np.invert(np.logical_or(idx1, idx2))] = 0
 
-        dist2 = delta_pt[0,:]**2 + temp_y**2
-        closes = dist2 <= 0.1
+        closes = (temp_x ** 2 + temp_y ** 2) <= 0.1
+        self._update_checkpoint_reaches(temp_x, temp_y)
         for i in range(self.num_agents):
-            if closes[i] and not self.near_starts[i]:
-                self.near_starts[i] = True
-                self.toggle_list[i] += 1
-            elif not closes[i] and self.near_starts[i]:
-                self.near_starts[i] = False
-                self.toggle_list[i] += 1
-            self.lap_counts[i] = self.toggle_list[i] // 2
-            if self.toggle_list[i] < self.max_lap:
+            if closes[i] and np.all(self._checkpoint_reaches[i]):
+                self.lap_counts[i] += 1
                 self.lap_times[i] = self.current_time
+                self._checkpoint_reaches[i, :] = False
         
         done = (self.collisions[self.ego_idx]) or np.all(self.toggle_list >= self.max_lap)
         
         return done, self.toggle_list >= self.max_lap
+
+    def _update_checkpoint_reaches(self, temp_x, temp_y):
+        for i in range(self.num_agents):
+            if not self._checkpoint_reaches[i][0]:
+                if temp_x[i] > 10 and temp_y[i] >= 25:
+                    self._checkpoint_reaches[i][0] = True
+                continue
+            elif not self._checkpoint_reaches[i][1]:
+                if np.abs(temp_x[i]) < 1.0 and temp_y[i] >= 30:
+                    self._checkpoint_reaches[i][1] = True
+                continue
+            elif not self._checkpoint_reaches[i][2]:
+                if temp_x[i] < -4 and temp_y[i] <= 25:
+                    self._checkpoint_reaches[i][2] = True
 
     def _update_state(self, obs_dict):
         """
