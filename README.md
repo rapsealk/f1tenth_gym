@@ -21,6 +21,10 @@ Then you can run a quick waypoint follow example by:
 cd examples
 python3 waypoint_follow.py
 ```
+or using docker..
+```
+$ docker run -it --rm -v $PWD:/tmp -w /tmp tensorflow/tensorflow:latest-gpu
+```
 
 ## Environment Details
 ### Observation

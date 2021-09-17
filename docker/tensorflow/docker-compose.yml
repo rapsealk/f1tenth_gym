@@ -1,0 +1,9 @@
+version: "3.7"
+
+services:
+  tensorflow:
+    image: tensorflow
+    restart: always
+    ports:
+      - "8888:8888"
+    container_name: "tensorflow"
