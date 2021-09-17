@@ -179,6 +179,13 @@ class Buffer:
 
 
 def main():
+    from models.tensorflow_impl import DDPGAgent
+
+    env = gym.make('Pendulum-v0')
+    agent = DDPGAgent(action_size=env.action_space.shape[-1])
+    agent.train(env)
+    return
+
     args = parser.parse_args()
     env = gym.make(args.env)
 

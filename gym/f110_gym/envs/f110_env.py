@@ -50,17 +50,17 @@ WINDOW_H = 800
 class F110Env(gym.Env, utils.EzPickle):
     """
     OpenAI gym environment for F1TENTH
-    
+
     Env should be initialized by calling gym.make('f110_gym:f110-v0', **kwargs)
 
     Args:
         kwargs:
             seed (int, default=12345): seed for random state and reproducibility
-            
+
             map (str, default='vegas'): name of the map used for the environment. Currently, available environments include: 'berlin', 'vegas', 'skirk'. You could use a string of the absolute path to the yaml file of your custom map.
-        
+
             map_ext (str, default='png'): image extension of the map image file. For example 'png', 'pgm'
-        
+
             params (dict, default={'mu': 1.0489, 'C_Sf':, 'C_Sr':, 'lf': 0.15875, 'lr': 0.17145, 'h': 0.074, 'm': 3.74, 'I': 0.04712, 's_min': -0.4189, 's_max': 0.4189, 'sv_min': -3.2, 'sv_max': 3.2, 'v_switch':7.319, 'a_max': 9.51, 'v_min':-5.0, 'v_max': 20.0, 'width': 0.31, 'length': 0.58}): dictionary of vehicle parameters.
             mu: surface friction coefficient
             C_Sf: Cornering stiffness coefficient, front
@@ -90,7 +90,7 @@ class F110Env(gym.Env, utils.EzPickle):
     """
     metadata = {'render.modes': ['human', 'human_fast']}
 
-    def __init__(self, **kwargs):        
+    def __init__(self, **kwargs):
         # kwargs extraction
         try:
             self.seed = kwargs['seed']
@@ -139,6 +139,8 @@ class F110Env(gym.Env, utils.EzPickle):
 
         self.max_lap = kwargs.get('max_lap', float('inf'))
 
+        self.starting_point = kwargs.get('starting_point', np.zeros((self.num_agents, 3)))
+
         # radius to consider done
         self.start_thresh = 0.5  # 10cm
 
@@ -163,7 +165,6 @@ class F110Env(gym.Env, utils.EzPickle):
         self.num_toggles = 0
         self.near_start = True
         self.near_starts = np.array([True]*self.num_agents)
-        self.toggle_list = np.zeros((self.num_agents,))
         self.start_xs = np.zeros((self.num_agents, ))
         self.start_ys = np.zeros((self.num_agents, ))
         self.start_thetas = np.zeros((self.num_agents, ))
@@ -178,6 +179,7 @@ class F110Env(gym.Env, utils.EzPickle):
         self.renderer = None
         self.current_obs = None
 
+        """
         self._observation_space = gym.spaces.Dict({
             'edo_idx': gym.spaces.Discrete(1),
             'scans': gym.spaces.Box(0.0, 32.0, shape=(self.num_agents, 1080)),
@@ -191,6 +193,8 @@ class F110Env(gym.Env, utils.EzPickle):
             'lap_times': gym.spaces.Box(0.0, float('inf'), shape=(self.num_agents,)),
             'lap_counts': gym.spaces.Box(0.0, float('inf'), shape=(self.num_agents,), dtype=np.uint8)
         })
+        """
+        self._observation_space = gym.spaces.Box(-1.0, 1.0, shape=(self.num_agents, 1086))
         self._action_space = gym.spaces.Box(-1.0, 1.0, shape=(self.num_agents, 2))
 
         self._checkpoint_reaches = np.zeros((self.num_agents, 3))   # .astype(np.bool)
@@ -204,20 +208,19 @@ class F110Env(gym.Env, utils.EzPickle):
     def _check_done(self):
         """
         Check if the current rollout is done
-        
+
         Args:
             None
 
         Returns:
             done (bool): whether the rollout is done
-            toggle_list (list[int]): each agent's toggle list for crossing the finish zone
         """
 
         # this is assuming 2 agents
         # TODO: switch to maybe s-based
         left_t = 2
         right_t = 2
-        
+
         poses_x = np.array(self.poses_x)-self.start_xs
         poses_y = np.array(self.poses_y)-self.start_ys
         delta_pt = np.dot(self.start_rot, np.stack((poses_x, poses_y), axis=0))
@@ -236,10 +239,10 @@ class F110Env(gym.Env, utils.EzPickle):
                 self.lap_counts[i] += 1
                 self.lap_times[i] = self.current_time
                 self._checkpoint_reaches[i, :] = False
-        
-        done = (self.collisions[self.ego_idx]) or np.all(self.toggle_list >= self.max_lap)
-        
-        return done, self.toggle_list >= self.max_lap
+
+        done = (self.collisions[self.ego_idx]) or (self.lap_counts > self.last_lap_counts)[self.ego_idx]
+
+        return done
 
     def _update_checkpoint_reaches(self, temp_x, temp_y):
         for i in range(self.num_agents):
@@ -258,7 +261,7 @@ class F110Env(gym.Env, utils.EzPickle):
     def _update_state(self, obs_dict):
         """
         Update the env's states according to observations
-        
+
         Args:
             obs_dict (dict): dictionary of observation
 
@@ -292,40 +295,43 @@ class F110Env(gym.Env, utils.EzPickle):
             done (bool): if the simulation is done
             info (dict): auxillary information dictionary
         """
-        
+
         # call simulation step
         obs = self.sim.step(action)
         obs['lap_times'] = self.lap_times
         obs['lap_counts'] = self.lap_counts
 
         self.current_obs = obs
-        
+
         # update data member
         self._update_state(obs)
 
         # times
+        track_angle = self._get_angle_on_track()
+        reward = track_angle / 360 - 1
         # reward = self.timestep
         self.current_time = self.current_time + self.timestep
-        track_angle = self._get_angle_on_track()
-        reward = track_angle - self.last_track_angle
-        reward = np.clip(reward, -0.1, 0.1)
-        self.last_track_angle = track_angle
 
         # check done
-        done, toggle_list = self._check_done()
+        done = self._check_done()
         lap_passed = (self.lap_counts > self.last_lap_counts).tolist()
-        if lap_passed[0]:
-            self.last_track_angle = 0
-            reward = 1.0
-        info = {'checkpoint_done': toggle_list, 'lap_passed': lap_passed}
-
-        # print(f'[{datetime.now().isoformat()}] pos(x={obs["poses_x"][0]:.2f}, y={obs["poses_y"][0]:.2f}) angle={self.last_track_angle:.2f}->{track_angle:.2f} reward={reward:.2f}')
+        info = {'lap_passed': lap_passed}
 
         self.last_lap_counts[:] = self.lap_counts
 
+        # FIXME: obs
+        obs = np.asarray([*obs['scans'][self.ego_idx] / 10.0,
+                          obs['poses_x'][self.ego_idx] / 50.0,
+                          obs['poses_y'][self.ego_idx] / 50.0,
+                          np.cos(obs['poses_theta'][self.ego_idx]),
+                          np.sin(obs['poses_theta'][self.ego_idx]),
+                          obs['linear_vels_x'][self.ego_idx] / 10.0,
+                          obs['ang_vels_z'][self.ego_idx]],
+                         dtype=np.float32)
+
         return obs, reward, done, info
 
-    def reset(self, poses):
+    def reset(self, poses=None):
         """
         Reset the gym environment by given poses
 
@@ -338,16 +344,16 @@ class F110Env(gym.Env, utils.EzPickle):
             done (bool): if the simulation is done
             info (dict): auxillary information dictionary
         """
+        poses = poses or self.starting_point
+
         # reset counters and data members
         self.current_time = 0.0
         self.collisions = np.zeros((self.num_agents, ))
         self.num_toggles = 0
         self.near_start = True
         self.near_starts = np.array([True]*self.num_agents)
-        self.toggle_list = np.zeros((self.num_agents,))
         self.lap_counts - np.zeros((self.num_agents,))
         self.last_lap_counts = self.lap_counts.copy()
-        self.last_track_angle = 0
 
         # states after reset
         self.start_xs = poses[:, 0]
@@ -360,8 +366,8 @@ class F110Env(gym.Env, utils.EzPickle):
 
         # get no input observations
         action = np.zeros((self.num_agents, 2))
-        obs, reward, done, info = self.step(action)
-        return obs, reward, done, info
+        obs, _, _, _ = self.step(action)
+        return obs
 
     def update_map(self, map_path, map_ext):
         """
@@ -379,7 +385,7 @@ class F110Env(gym.Env, utils.EzPickle):
     def update_params(self, params, index=-1):
         """
         Updates the parameters used by simulation for vehicles
-        
+
         Args:
             params (dict): dictionary of parameters
             index (int, default=-1): if >= 0 then only update a specific agent's params
