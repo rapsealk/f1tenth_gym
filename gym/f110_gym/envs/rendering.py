@@ -47,6 +47,7 @@ ZOOM_OUT_FACTOR = 1/ZOOM_IN_FACTOR
 CAR_LENGTH = 0.58
 CAR_WIDTH = 0.31
 
+
 class EnvRenderer(pyglet.window.Window):
     """
     A window class inherited from pyglet.window.Window, handles the camera/projection interaction, resizing window, and rendering the environment
@@ -85,7 +86,7 @@ class EnvRenderer(pyglet.window.Window):
 
         # current env map
         self.map_points = None
-        
+
         # current env agent poses, (num_agents, 3), columns are (x, y, theta)
         self.poses = None
 
@@ -259,7 +260,7 @@ class EnvRenderer(pyglet.window.Window):
     def on_draw(self):
         """
         Function when the pyglet is drawing. The function draws the batch created that includes the map points, the agent polygons, and the information text, and the fps display.
-        
+
         Args:
             None
 
@@ -334,3 +335,14 @@ class EnvRenderer(pyglet.window.Window):
         self.poses = poses
 
         self.score_label.text = 'Lap Time: {laptime:.2f}, Ego Lap Count: {count:.0f}'.format(laptime=obs['lap_times'][0], count=obs['lap_counts'][obs['ego_idx']])
+
+    """
+    def gif(self, path=None):
+        pyglet.image.Animation.from_image_sequence(self.buffer, duration=1/60, loop=True)
+
+    def clear_buffer(self):
+        return self.buffer.clear()
+    """
+
+    def save_frame(self, path):
+        pyglet.image.get_buffer_manager().get_color_buffer().save(path)

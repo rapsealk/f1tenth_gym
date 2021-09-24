@@ -23,6 +23,8 @@
 '''
 Author: Hongrui Zheng
 '''
+import os
+import time
 
 # gym imports
 import gym
@@ -34,9 +36,9 @@ from f110_gym.envs.base_classes import Simulator
 
 # others
 import numpy as np
-import os
-import time
-from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from PIL import Image
 
 # constants
 
@@ -199,6 +201,10 @@ class F110Env(gym.Env, utils.EzPickle):
 
         self._checkpoint_reaches = np.zeros((self.num_agents, 3))   # .astype(np.bool)
 
+        self._frame_dir = os.path.join(os.path.dirname(__file__), 'tmp')
+        if not os.path.exists(self._frame_dir):
+            os.mkdir(self._frame_dir)
+
     def __del__(self):
         """
         Finalizer, does cleanup
@@ -279,7 +285,6 @@ class F110Env(gym.Env, utils.EzPickle):
         degree = np.arctan2(dy, dx) * 180 / np.pi
         if degree < 0:
             degree = 360 + degree
-        # print(f'[{datetime.now().isoformat()}] pos({pos}) d({dx:.2f}, {dy:.2f}) angle={degree:.2f}')
         return degree
 
     def step(self, action):
@@ -319,6 +324,10 @@ class F110Env(gym.Env, utils.EzPickle):
 
         self.last_lap_counts[:] = self.lap_counts
 
+        if self.renderer is not None:
+            self.renderer.save_frame(os.path.join(self._frame_dir, f'{self._frame_count:08d}.png'))
+            self._frame_count += 1
+
         # FIXME: obs
         obs = np.asarray([*obs['scans'][self.ego_idx] / 10.0,
                           obs['poses_x'][self.ego_idx] / 50.0,
@@ -344,6 +353,12 @@ class F110Env(gym.Env, utils.EzPickle):
             done (bool): if the simulation is done
             info (dict): auxillary information dictionary
         """
+        self._frame_count = 0
+        if self.renderer is not None:
+            self.gif()
+            for file_ in os.listdir(self._frame_dir):
+                os.remove(os.path.join(self._frame_dir, file_))
+
         poses = poses or self.starting_point
 
         # reset counters and data members
@@ -421,6 +436,17 @@ class F110Env(gym.Env, utils.EzPickle):
             time.sleep(0.005)
         elif mode == 'human_fast':
             pass
+
+    def gif(self):
+        fig = plt.figure()
+        # paths = os.listdir(self._frame_dir)
+        # artists = tuple(map(lambda x: Image.open(os.path.join(self._frame_dir, x)), paths))
+        artists = []
+        for path in os.listdir(self._frame_dir):
+            image = Image.open(os.path.join(self._frame_dir, path))
+            artists.append([plt.imshow(image, animated=True)])
+        anim = animation.ArtistAnimation(fig, artists, interval=int(1000/60), repeat=True)
+        anim.save(os.path.join(os.path.dirname(__file__), f'{int(time.time() * 1000)}.gif'))
 
     @property
     def observation_space(self):
